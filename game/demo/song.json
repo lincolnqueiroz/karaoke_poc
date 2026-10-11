@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "title": "Synthetic note preview",
+  "duration_seconds": 8.0,
+  "audio": {},
+  "notes": [
+    {"start": 0.5, "duration": 0.7, "midi": 60, "confidence": 1.0},
+    {"start": 1.4, "duration": 0.5, "midi": 62, "confidence": 1.0},
+    {"start": 2.1, "duration": 0.8, "midi": 64, "confidence": 1.0},
+    {"start": 3.1, "duration": 1.0, "midi": 67, "confidence": 1.0},
+    {"start": 4.4, "duration": 1.2, "midi": 65, "confidence": 1.0}
+  ]
+}

@@ -1,0 +1,1 @@
+Place an MP3 you own or are licensed to use here, named `example.mp3`. Audio is intentionally not distributed with this repository. The test manifest under `game/demo/` is synthetic and needs no copyrighted music.

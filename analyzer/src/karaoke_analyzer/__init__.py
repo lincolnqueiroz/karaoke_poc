@@ -1,0 +1,1 @@
+"""Offline karaoke melody analyzer."""

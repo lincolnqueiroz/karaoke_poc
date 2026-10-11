@@ -1,0 +1,119 @@
+[gd_scene format=3 uid="uid://bvre3h7dfor6y"]
+
+[ext_resource type="Script" uid="uid://wykf2uxhh72b" path="res://scripts/karaoke_player.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/microphone_capture.gd" id="2"]
+
+[node name="KaraokePlayer" type="Control" unique_id=323903997]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+song_manifest = "res://demo/como_eu_quero/song.json"
+lyrics_file = "res://demo/como_eu_quero/lyrics/como_eu_quero.lrc"
+visual_offset_seconds = 0.09999999999999998
+
+[node name="Audio" type="AudioStreamPlayer" parent="." unique_id=762489415]
+
+[node name="Microphone" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="MicrophoneControls" type="HBoxContainer" parent="."]
+offset_left = 12.0
+offset_top = 44.0
+anchor_right = 1.0
+offset_right = -12.0
+offset_bottom = 78.0
+
+[node name="Devices" type="OptionButton" parent="MicrophoneControls"]
+custom_minimum_size = Vector2(260, 32)
+layout_mode = 2
+
+[node name="Toggle" type="Button" parent="MicrophoneControls"]
+layout_mode = 2
+text = "Ativar microfone"
+
+[node name="Gain" type="SpinBox" parent="MicrophoneControls"]
+layout_mode = 2
+max_value = 30.0
+value = 12.0
+prefix = "Ganho"
+suffix = "dB"
+tooltip_text = "Ganho da entrada: aumenta voz e ruído"
+
+[node name="Octave" type="OptionButton" parent="MicrophoneControls"]
+layout_mode = 2
+tooltip_text = "Desloca apenas o traço da voz para comparar outra oitava"
+
+[node name="MicrophoneStatus" type="Label" parent="."]
+offset_left = 12.0
+offset_top = 82.0
+anchor_right = 1.0
+offset_right = -12.0
+offset_bottom = 108.0
+theme_override_font_sizes/font_size = 16
+text = "Microfone desligado · use fones de ouvido"
+mouse_filter = 2
+
+[node name="ResetScore" type="Button" parent="MicrophoneControls"]
+layout_mode = 2
+text = "Zerar pontos"
+tooltip_text = "Começar uma nova avaliação a partir deste momento"
+
+[node name="Score" type="Label" parent="."]
+offset_left = 370.0
+offset_top = 4.0
+anchor_right = 1.0
+offset_right = -12.0
+offset_bottom = 36.0
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 2
+text = "Ative o microfone para pontuar"
+mouse_filter = 2
+
+[node name="Timeline" type="Control" parent="." unique_id=258635703]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Lyrics" type="Label" parent="."]
+layout_mode = 0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -160.0
+offset_right = -16.0
+offset_bottom = -96.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.98, 0.98, 0.98, 1)
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="NextLyrics" type="Label" parent="."]
+layout_mode = 0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -94.0
+offset_right = -16.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.65, 0.71, 0.99, 1)
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
