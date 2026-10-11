@@ -1,14 +1,17 @@
 extends Control
 
 const Library = preload("res://scripts/song_library.gd")
-const UI = preload("res://scripts/gameplay_ui.gd")
 const PlayerScene = preload("res://scenes/karaoke_player.tscn")
 const Importer = preload("res://scripts/song_importer.gd")
 const ImportPage = preload("res://scripts/import_page.gd")
+const Neon = preload("res://scripts/neon_theme.gd")
 var importer: Node
 const SETTINGS_PATH = "user://settings.cfg"
+const MENU_MUSIC_PATH = "res://assets/audio/music/menu.mp3"
 var input_device: String = "Default"
 var input_gain_db: float = 12.0
+var volumes: Dictionary = {"Master": 100.0, "Music": 100.0, "Effects": 100.0, "MenuMusic": 30.0}
+var menu_music: AudioStreamPlayer
 var content: VBoxContainer
 var menu_panel: CenterContainer
 var player: Control
@@ -27,68 +30,103 @@ func _ready() -> void:
             input_gain_db = clampf(float(gain), 0, 30)
     elif error != ERR_FILE_NOT_FOUND:
         push_warning("Não foi possível carregar as configurações: " + error_string(error))
-    var background = ColorRect.new()
-    background.color = Color("#080f1e")
-    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(background)
-    theme = Theme.new()
-    theme.default_font_size = 20
-    for kind in ["Button", "OptionButton"]:
-        theme.set_stylebox("normal", kind, UI.card(Color("#17243b"), Color("#334764"), 14))
-        theme.set_stylebox("hover", kind, UI.card(Color("#233e59"), Color("#38bdf8"), 14))
-        theme.set_stylebox("pressed", kind, UI.card(Color("#233e59"), Color("#38bdf8"), 14))
-        theme.set_stylebox("focus", kind, UI.card(Color("#233e59"), Color("#38bdf8"), 14))
+    for bus in volumes:
+        var value = settings.get_value("volume", bus, volumes[bus])
+        if (value is float or value is int) and is_finite(float(value)):
+            volumes[bus] = clampf(float(value), 0, 100)
+        apply_volume(bus, volumes[bus])
+    setup_menu_music()
+    add_child(Neon.background())
+    theme = Neon.create(18)
     menu_panel = CenterContainer.new()
     menu_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(menu_panel)
     var panel = PanelContainer.new()
     panel.custom_minimum_size = Vector2(640, 500)
-    panel.add_theme_stylebox_override("panel", UI.card(Color("#101e34"), Color("#30516b"), 28))
+    panel.add_theme_stylebox_override("panel", Neon.frame(Color(Neon.CYAN, 0.48), 28))
     menu_panel.add_child(panel)
     content = VBoxContainer.new()
     content.add_theme_constant_override("separation", 16)
     panel.add_child(content)
     show_main()
 
+func setup_menu_music() -> void:
+    menu_music = AudioStreamPlayer.new()
+    menu_music.name = "MenuMusic"
+    menu_music.bus = &"MenuMusic"
+    add_child(menu_music)
+    if not ResourceLoader.exists(MENU_MUSIC_PATH):
+        push_warning("Música de fundo não encontrada: " + MENU_MUSIC_PATH)
+        return
+    var stream = load(MENU_MUSIC_PATH) as AudioStreamMP3
+    if stream == null:
+        push_warning("Não foi possível carregar a música de fundo: " + MENU_MUSIC_PATH)
+        return
+    stream = stream.duplicate() as AudioStreamMP3
+    stream.loop = true
+    menu_music.stream = stream
+
+func play_menu_music() -> void:
+    if menu_music != null and menu_music.stream != null and not menu_music.playing:
+        menu_music.play()
+
+func _exit_tree() -> void:
+    if is_instance_valid(menu_music):
+        menu_music.stop()
+
 func clear_page(title: String) -> void:
+    content.alignment = BoxContainer.ALIGNMENT_CENTER if title == "KARAOKÊ" else BoxContainer.ALIGNMENT_BEGIN
     for child in content.get_children():
         content.remove_child(child)
         child.queue_free()
     var heading = Label.new()
-    heading.text = title
+    heading.text = title.to_upper()
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    heading.add_theme_font_size_override("font_size", 36)
-    heading.add_theme_color_override("font_color", Color("#67e8f9"))
+    Neon.title(heading, Neon.MAGENTA if title == "Configurações" else Neon.CYAN)
     content.add_child(heading)
 
 func button(text: String, callback: Callable, parent: Node = null) -> Button:
     var control = Button.new()
-    control.text = text
+    control.text = text.to_upper() if parent == null else text
     control.custom_minimum_size.y = 52
-    control.pressed.connect(callback)
+    control.pressed.connect(func():
+        if not importer.busy:
+            callback.call())
     (parent if parent != null else content).add_child(control)
     return control
 
-func label(text: String) -> Label:
+func label(text: String, parent: Node = null) -> Label:
     var control = Label.new()
-    control.text = text
+    control.text = text.to_upper() if parent != null else text
+    if parent != null:
+        control.add_theme_font_size_override("font_size", 15)
+        control.add_theme_color_override("font_color", Neon.MUTED)
     control.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    content.add_child(control)
+    (parent if parent != null else content).add_child(control)
     return control
 
 func show_main() -> void:
+    play_menu_music()
     menu_panel.show()
-    clear_page("KARAOKE")
+    clear_page("KARAOKÊ")
+    Neon.title(content.get_child(0), Neon.MAGENTA, 58)
     label("Sua voz, sua música. Escolha uma canção e comece a cantar.")
-    button("Jogar", show_songs).grab_focus()
-    button("Configurações", show_settings)
-    button("Sair", func(): get_tree().quit())
+    var play = button("Jogar", show_songs)
+    play.icon = Neon.icon("note")
+    Neon.accent_button(play, Neon.CYAN)
+    play.grab_focus()
+    var settings_button = button("Configurações", show_settings)
+    settings_button.icon = Neon.icon("settings")
+    Neon.accent_button(settings_button, Neon.MAGENTA)
+    var exit = button("Sair", func(): get_tree().quit())
+    exit.icon = Neon.icon("power")
+    Neon.accent_button(exit, Neon.YELLOW)
 
 func show_songs() -> void:
     clear_page("Escolha sua música")
     var library = Library.discover(preload("res://scripts/runtime_paths.gd").library_roots())
     var scroll = ScrollContainer.new()
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.custom_minimum_size.y = 270
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     content.add_child(scroll)
@@ -101,8 +139,11 @@ func show_songs() -> void:
         var song_label = str(song.title)
         if not str(song.get("artist", "")).is_empty():
             song_label += " — " + str(song.artist)
-        button("%s  ·  %02d:%02d" % [song_label, int(seconds / 60.0), seconds % 60],
+        var song_button = button("%s  ·  %02d:%02d" % [song_label, int(seconds / 60.0), seconds % 60],
                func(): open_song(song), list)
+        song_button.icon = Neon.icon("note")
+        song_button.clip_text = true
+        song_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
     if library.songs.is_empty():
         label("Nenhuma música importada encontrada. Adicione a análise e o áudio à biblioteca local.")
     if not library.errors.is_empty():
@@ -110,7 +151,9 @@ func show_songs() -> void:
         warning.tooltip_text = "\n".join(library.errors)
     button("Voltar", show_main)
 
-    button("Importar música", show_import)
+    var import_button = button("Importar música", show_import)
+    import_button.icon = Neon.icon("import")
+    Neon.accent_button(import_button, Neon.GREEN)
 
 func show_import() -> void:
     clear_page("Importar música")
@@ -131,7 +174,18 @@ func _notification(what: int) -> void:
 
 func show_settings() -> void:
     clear_page("Configurações")
-    label("Microfone")
+    var columns = HBoxContainer.new()
+    columns.add_theme_constant_override("separation", 28)
+    content.add_child(columns)
+    var microphone_settings = VBoxContainer.new()
+    microphone_settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    microphone_settings.add_theme_constant_override("separation", 12)
+    columns.add_child(microphone_settings)
+    var audio_settings = VBoxContainer.new()
+    audio_settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    audio_settings.add_theme_constant_override("separation", 8)
+    columns.add_child(audio_settings)
+    label("Microfone", microphone_settings)
     var devices = OptionButton.new()
     var available = AudioServer.get_input_device_list()
     for device in available:
@@ -139,14 +193,19 @@ func show_settings() -> void:
     var selected = available.find(input_device)
     devices.select(selected if selected >= 0 else 0)
     devices.disabled = available.is_empty() or AudioServer.get_driver_name() == "Dummy"
-    content.add_child(devices)
-    label("Ganho da entrada")
+    devices.clip_text = true
+    devices.fit_to_longest_item = false
+    microphone_settings.add_child(devices)
+    label("Ganho da entrada", microphone_settings)
     var gain = SpinBox.new()
     gain.min_value = 0
     gain.max_value = 30
     gain.value = input_gain_db
     gain.suffix = "dB"
-    content.add_child(gain)
+    microphone_settings.add_child(gain)
+    for entry in [["Master", "Volume geral"], ["Effects", "Volume dos efeitos"],
+                  ["Music", "Volume da canção"], ["MenuMusic", "Música de fundo (menus)"]]:
+        volume_control(audio_settings, entry[0], entry[1])
     status = label("O ganho amplifica voz e ruído. Use fones de ouvido.")
     if selected < 0:
         status.text = "Microfone salvo indisponível. Escolha outro dispositivo."
@@ -165,11 +224,44 @@ func save_settings(device: String, gain: float, path: String = SETTINGS_PATH) ->
     var config = ConfigFile.new()
     config.set_value("microphone", "device", device)
     config.set_value("microphone", "gain_db", gain)
+    for bus in volumes:
+        config.set_value("volume", bus, volumes[bus])
     var error = config.save(path)
     if error == OK:
         input_device = device
         input_gain_db = gain
     return error
+
+func apply_volume(bus: String, percentage: float) -> void:
+    if not volumes.has(bus) or not is_finite(percentage):
+        return
+    volumes[bus] = clampf(percentage, 0, 100)
+    var index = AudioServer.get_bus_index(bus)
+    if index >= 0:
+        AudioServer.set_bus_volume_linear(index, volumes[bus] / 100.0)
+        AudioServer.set_bus_mute(index, volumes[bus] == 0)
+
+func volume_control(parent: Node, bus: String, caption: String) -> void:
+    label(caption, parent)
+    var row = HBoxContainer.new()
+    parent.add_child(row)
+    var slider = HSlider.new()
+    slider.name = bus + "Volume"
+    slider.min_value = 0
+    slider.max_value = 100
+    slider.step = 1
+    slider.value = volumes[bus]
+    slider.custom_minimum_size = Vector2(160, 32)
+    slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    row.add_child(slider)
+    var value = Label.new()
+    value.custom_minimum_size.x = 54
+    value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    value.text = "%d%%" % slider.value
+    row.add_child(value)
+    slider.value_changed.connect(func(percentage):
+        apply_volume(bus, percentage)
+        value.text = "%d%%" % percentage)
 
 func open_song(song: Dictionary) -> void:
     if not FileAccess.file_exists(song.manifest):
@@ -184,6 +276,8 @@ func open_song(song: Dictionary) -> void:
     player.get_node("MicrophoneControls/Devices").hide()
     player.get_node("MicrophoneControls/Gain").hide()
     player.menu_requested.connect(return_to_menu)
+    player.preparation_started.connect(play_menu_music)
+    player.countdown_started.connect(menu_music.stop)
     menu_panel.hide()
     add_child(player)
 

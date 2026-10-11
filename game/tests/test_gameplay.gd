@@ -26,6 +26,11 @@ func verify() -> void:
     scene.microphone.input_gain_db = 15
     scene.start_round(false)
     check(scene.round_state == scene.RoundState.COUNTDOWN, "Start launches countdown")
+    var has_countdown_sound = ResourceLoader.exists(scene.COUNTDOWN_SOUND_PATH)
+    check(scene.countdown_player.bus == &"Effects", "Countdown uses effects volume")
+    if has_countdown_sound:
+        check(scene.countdown_player.playing and not scene.countdown_player.stream.loop,
+              "Countdown starts the complete effect once without looping")
     scene._process(2)
     check(scene.elapsed == 0 and not scene.scorer.started, "Countdown does not score")
     scene._process(1)
@@ -35,6 +40,7 @@ func verify() -> void:
     check(scene.round_state == scene.RoundState.RESULT, "Song end shows result")
     check(scene.gameplay_ui.description.text.contains("sem pontuação"), "Preview is not a zero-score performance")
     scene.prepare_round()
+    check(not scene.countdown_player.playing, "Preparing replay stops the countdown effect")
     check(scene.elapsed == 0 and scene.scorer.total == 0 and scene.sung_pitch.is_empty(),
           "Replay clears time, score and trace")
     check(scene.voice_octaves == 1 and scene.microphone.input_gain_db == 15,
@@ -47,10 +53,26 @@ func verify() -> void:
     scene._process(6)
     check(scene.round_state == scene.RoundState.RESULT and scene.scorer.result().points == 0,
           "Scored result finalizes missing vocals")
+    var ui = scene.gameplay_ui
+    check(ui.final_score.visible and ui.final_score.text == "0.0", "Scored result displays a large decimal score")
+    check(ui.score_text(5540) == "5.5", "Score has one decimal place")
+    check(ui.score_text(10000) == "10.0", "Maximum displayed score is ten")
+    check(ui.score_color(0).is_equal_approx(Color("#f87171")) and
+          ui.score_color(5000).is_equal_approx(Color("#facc15")) and
+          ui.score_color(10000).is_equal_approx(Color("#4ade80")),
+          "Result colors pass through red, yellow and green")
+    check(ui.score_color(2500).is_equal_approx(ui.score_color(0).lerp(ui.score_color(5000), 0.5)),
+          "Result color blends smoothly between endpoints")
     var points = scene.scorer.result().points
     scene._process(10)
     check(scene.scorer.result().points == points, "Result freezes evaluation")
+    scene.prepare_round()
+    check(not ui.final_score.visible, "Replay hides the previous final score")
+    scene.start_round(false)
+    scene.gameplay_ui.menu_requested.emit()
+    check(not scene.countdown_player.playing, "Leaving during countdown stops the effect")
     scene.queue_free()
     await process_frame
+    await create_timer(0.5).timeout
     print("Gameplay checks: ", "PASS" if failures == 0 else "FAIL")
     quit(0 if failures == 0 else 1)

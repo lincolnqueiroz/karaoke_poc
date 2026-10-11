@@ -24,8 +24,9 @@ segunda música completa e conferir a qualidade da referência antes de pontuar.
 
 ## Importação opcional de letras do LRCLIB
 
-Possível integração futura com [LRCLIB](https://lrclib.net/), aproveitando o
-suporte atual a LRC. Ainda não implementada.
+Integração de busca e seleção implementada com [LRCLIB](https://lrclib.net/),
+aproveitando o suporte atual a LRC. Ver [fluxo e configuração](song-import.md#letras-online).
+Pendente: validar a busca real por HTTPS no computador do usuário.
 
 A documentação oficial foi conferida: `/api/search` permite buscar por título
 e artista; `/api/get/{id}` recupera o resultado escolhido. `syncedLyrics`

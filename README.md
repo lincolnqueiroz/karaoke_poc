@@ -197,7 +197,7 @@ Run flow checks with `godot --headless --path game --script res://tests/test_gam
 2. Add pitch diagnostic plots, voicing filtering, octave correction and robust note segmentation.
 3. Improve the Godot timeline and automate local import.
 4. Add mic input and scoring after the melody reference is trustworthy.
-5. Evaluate optional synchronized-lyrics import from [LRCLIB](https://lrclib.net/),
+5. Validate synchronized-lyrics import from [LRCLIB](https://lrclib.net/),
    saving LRC locally and keeping Godot playback offline. See the
    [project roadmap](docs/roadmap.md) for scope and validation steps.
 

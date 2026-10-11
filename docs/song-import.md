@@ -11,18 +11,18 @@ Execute o projeto com F5 e abra **Jogar → Importar música**.
    Resultados sem LRC válido são omitidos. Uma diferença de duração acima
    de 2 s entre resultado e MP3 gera aviso; não implica ajuste automático.
    Alterar título, artista ou MP3 invalida a seleção online.
-3. O Python do venv é preenchido a partir de `analyzer/.venv/Scripts/python.exe`.
+4. No editor, o Python do venv é preenchido a partir de `analyzer/.venv/Scripts/python.exe`.
    Confira esse caminho. Não é necessário ativar o venv no terminal.
-4. Se FFmpeg/FFprobe não estiverem no PATH herdado pelo Godot, selecione a pasta
+5. No editor, se FFmpeg/FFprobe não estiverem no PATH herdado pelo Godot, selecione a pasta
    que contém ambos. Reiniciar o editor também atualiza um PATH recém-alterado.
-5. Mantenha **Separar voz com Demucs** para melhor estimativa da melodia e
+6. Mantenha **Separar voz com Demucs** para melhor estimativa da melodia e
    escolha CUDA ou CPU. CUDA exige o PyTorch CUDA instalado no venv e um
    dispositivo disponível; não há troca automática para CPU em caso de erro.
-6. Por padrão, somente pesos em cache podem ser usados. Marque a autorização
+7. Por padrão, somente pesos em cache podem ser usados. Marque a autorização
    de download se quiser permitir que a biblioteca Demucs baixe seus pesos
    oficiais. Desmarcar a separação evita modelos, mas estima pitch na mistura
    completa e pode produzir uma referência menos confiável.
-7. Clique em **Importar música**. A interface continua respondendo e informa
+8. Clique em **Importar música**. A interface continua respondendo e informa
    a etapa atual. Ao concluir, o seletor atualiza a biblioteca automaticamente.
 
 A barra representa etapas do pipeline, não uma estimativa precisa de tempo
@@ -55,7 +55,34 @@ O parser de letras do jogo continua validando o conteúdo LRC ao abrir a música
 No editor, esta integração usa a estrutura local do repositório e o venv.
 No jogo exportado, usa o analisador e o FFmpeg incluídos no pacote, com dados
 na pasta do usuário; veja [distribuição Windows](windows-distribution.md).
-A importação atual recebe arquivos locais, sem buscar YouTube ou LRCLIB.
+A importação de áudio recebe apenas MP3 local; a letra pode vir do LRCLIB.
+
+## Letras online
+
+O cliente usa `GET https://lrclib.net/api/search` com título e artista,
+conforme a [documentação oficial](https://lrclib.net/docs). Não envia áudio,
+não publica letras e não inventa tempos para texto sem sincronização.
+Somente o resultado selecionado é importado, com origem/ID registrados no
+tag `re` do LRC. A letra final fica na pasta `lyrics/` e a reprodução é offline.
+O LRC temporário é removido depois do job; arquivos locais não são removidos.
+
+O título ocupa o campo existente em song.json v1. Artista é salvo em
+`metadata.json` ao lado do manifesto, sem alterar seu contrato; bibliotecas
+antigas sem esse arquivo continuam funcionando.
+
+O serviço exige identificação do cliente. A URL fornecida pelo usuário já está
+configurada em `game/project.godot`:
+
+```ini
+[lyrics]
+lrclib/client_contact="https://github.com/lincolnqueiroz/karaoke_poc/"
+```
+
+O valor identifica o aplicativo no User-Agent, não o jogador. Sem esse valor,
+a busca informa explicitamente que falta configuração; LRC local e importação
+sem letra continuam disponíveis. Buscas são sequenciais, com intervalo mínimo
+de 300 ms, timeout de 20 s e respeito a `Retry-After` em erros HTTP 429.
+Falhas de rede ou respostas inválidas são mostradas sem iniciar análise.
 
 ## Verificação
 
@@ -63,6 +90,7 @@ A importação atual recebe arquivos locais, sem buscar YouTube ou LRCLIB.
 .\analyzer\.venv\Scripts\python.exe -m pytest analyzer/tests
 godot --headless --path game --script res://tests/test_import.gd
 godot --headless --path game --script res://tests/test_menu.gd
+godot --headless --path game --script res://tests/test_lrclib.gd
 ```
 
 Os testes de unidade simulam análise, modelos e subprocessos. Na sessão de
@@ -70,3 +98,16 @@ implementação, um MP3 sintético de 1,5 segundo também percorreu o pipeline
 real com FFmpeg, e a chamada pelo Godot passou com Demucs/CUDA e pesos em cache.
 Os artefatos desse teste ficam em `workspace/environment-check/import-integration/`,
 fora da biblioteca de músicas do usuário.
+
+Na atualização do fluxo, 82 testes Python, Ruff e os testes Godot de menu,
+importação e LRCLIB passaram. Uma importação real de MP3 sintético pelo
+formulário, com resposta LRCLIB simulada, verificou título/artista, associação
+do LRC e limpeza do temporário, mesmo com um caminho local inválido escondido.
+O analisador empacotado também importou MP3/LRC com título e artista, sem
+Python/FFmpeg no PATH. O jogo foi reexportado e iniciou em headless com código 0.
+
+A busca real no LRCLIB foi tentada e falhou por conexão neste ambiente;
+o Godot também emitiu seu aviso de leitura de certificados. A busca real e o
+novo formulário no executável precisam de conferência manual no computador
+do usuário. O template release local não oferece `--script`, portanto o teste
+de formulário automatizado foi executado no editor, não dentro do release.

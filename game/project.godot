@@ -18,6 +18,14 @@ config/features=PackedStringArray("4.7")
 
 driver/enable_input=true
 
+[autoload]
+
+UISounds="*res://scripts/ui_sounds.gd"
+
+[lyrics]
+
+lrclib/client_contact="https://github.com/lincolnqueiroz/karaoke_poc/"
+
 [display]
 
 window/size/viewport_width=1280

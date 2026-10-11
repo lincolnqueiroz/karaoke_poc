@@ -4,7 +4,10 @@ const LrcLyrics = preload("res://scripts/lrc_lyrics.gd")
 const MicrophoneCapture = preload("res://scripts/microphone_capture.gd")
 const SingingScore = preload("res://scripts/singing_score.gd")
 const GameplayUI = preload("res://scripts/gameplay_ui.gd")
+const COUNTDOWN_SOUND_PATH = "res://assets/audio/sfx/countdown.mp3"
 signal menu_requested
+signal preparation_started
+signal countdown_started
 var configured_input_device: String = "Default"
 enum RoundState { PREPARE, COUNTDOWN, PLAYING, RESULT }
 var round_state = RoundState.PLAYING
@@ -12,7 +15,7 @@ var gameplay_ui: GameplayUI
 var song_title: String = "Karaoke"
 var _countdown: float = 0.0
 var _scored_round: bool = false
-var note_style = GameplayUI.card(Color("#22b5d8"), Color("#67e8f9"), 0)
+var note_style = GameplayUI.Neon.frame(Color("#35deff"), 0)
 
 @export_file("*.json") var song_manifest: String = "res://demo/song.json"
 @export_file("*.lrc") var lyrics_file: String = ""
@@ -29,6 +32,7 @@ var pitch_max: float = 84.0
 var song_duration: float = 0.0
 var elapsed: float = 0.0
 var audio_player: AudioStreamPlayer
+var countdown_player: AudioStreamPlayer
 var audio_loaded: bool = false
 var output_latency: float = 0.0
 var lyric_cues: Array = []
@@ -47,7 +51,10 @@ var _end_wait: float = 0.0
 func _ready() -> void:
     output_latency = AudioServer.get_output_latency()
     note_style.set_corner_radius_all(6)
+    note_style.bg_color = Color("#167997")
+    note_style.shadow_size = 5
     audio_player = get_node_or_null("Audio") as AudioStreamPlayer
+    _setup_countdown_sound()
     lyrics_label = get_node_or_null("Lyrics") as Label
     next_lyrics_label = get_node_or_null("NextLyrics") as Label
     _load_song(song_manifest)
@@ -63,11 +70,35 @@ func _ready() -> void:
     gameplay_ui.start_requested.connect(start_round)
     gameplay_ui.replay_requested.connect(prepare_round)
     gameplay_ui.restart_requested.connect(prepare_round)
-    gameplay_ui.menu_requested.connect(func(): menu_requested.emit())
+    gameplay_ui.menu_requested.connect(func():
+        countdown_player.stop()
+        menu_requested.emit())
     prepare_round()
     set_process(true)
 
+func _setup_countdown_sound() -> void:
+    countdown_player = AudioStreamPlayer.new()
+    countdown_player.name = "CountdownSound"
+    countdown_player.bus = &"Effects"
+    add_child(countdown_player)
+    if not ResourceLoader.exists(COUNTDOWN_SOUND_PATH):
+        push_warning("Efeito da contagem não encontrado: " + COUNTDOWN_SOUND_PATH)
+        return
+    var stream = load(COUNTDOWN_SOUND_PATH) as AudioStreamMP3
+    if stream == null:
+        push_warning("Não foi possível carregar o efeito da contagem: " + COUNTDOWN_SOUND_PATH)
+        return
+    stream = stream.duplicate() as AudioStreamMP3
+    stream.loop = false
+    countdown_player.stream = stream
+
+func _exit_tree() -> void:
+    if is_instance_valid(countdown_player):
+        countdown_player.stop()
+
 func prepare_round() -> void:
+    if countdown_player != null:
+        countdown_player.stop()
     if audio_player != null:
         audio_player.stop()
     elapsed = 0.0
@@ -87,6 +118,7 @@ func prepare_round() -> void:
         gameplay_ui.prepare(song_title, song_duration > 0)
         gameplay_ui.preview.disabled = song_duration <= 0
     queue_redraw()
+    preparation_started.emit()
 
 func start_round(use_microphone: bool = true) -> void:
     if round_state != RoundState.PREPARE or song_duration <= 0:
@@ -104,11 +136,14 @@ func start_round(use_microphone: bool = true) -> void:
         _toggle_microphone()
     _scored_round = use_microphone
     if score_label != null:
-        score_label.text = "Pontos 00000/10000" if use_microphone else "Modo acompanhamento · sem pontuação"
+        score_label.text = "Pontos 0.0 / 10.0" if use_microphone else "Modo acompanhamento · sem pontuação"
     scorer = SingingScore.new()
     scorer.configure(notes, song_duration, visual_offset_seconds)
     _countdown = 3.0
     round_state = RoundState.COUNTDOWN
+    countdown_started.emit()
+    if countdown_player != null and countdown_player.stream != null:
+        countdown_player.play()
     _set_round_controls(true)
     if gameplay_ui != null:
         gameplay_ui.countdown(3)
@@ -123,6 +158,7 @@ func _set_round_controls(locked: bool) -> void:
         reset.hide()
 
 func _finish_round() -> void:
+    countdown_player.stop()
     scorer.advance(song_duration)
     round_state = RoundState.RESULT
     if microphone != null and microphone.active:
@@ -177,6 +213,7 @@ func _process(delta: float) -> void:
                 gameplay_ui.countdown(int(ceil(_countdown)))
             return
         elapsed = 0.0
+        # The final beep starts around 3 s; let its short tail finish over the song.
         sung_pitch.clear()
         if microphone != null:
             microphone.discard_pending()
@@ -214,9 +251,9 @@ func _process(delta: float) -> void:
         scorer.advance(finalized)
         if score_label != null:
             var score = scorer.result()
-            score_label.text = "%s %05d/10000 · Afinação %.0f%% · Canto %.0f%%" % [
+            score_label.text = "%s %s / 10.0 · Afinação %.0f%% · Canto %.0f%%" % [
                 "Final" if finalized >= song_duration else "Pontos",
-                score.points, score.accuracy, score.coverage]
+                gameplay_ui.score_text(score.points), score.accuracy, score.coverage]
     if gameplay_ui != null:
         gameplay_ui.playing(elapsed / maxf(song_duration, 0.001))
     if elapsed >= song_duration and _end_wait >= 0.3 + microphone_latency_seconds:
@@ -309,7 +346,7 @@ func _update_audio_clock(position: float, since_mix: float, latency: float) -> v
 func _draw() -> void:
     var w = size.x
     var h = size.y
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#080f1e"))
+    draw_rect(Rect2(Vector2.ZERO, size), GameplayUI.Neon.BACKGROUND)
     if song_duration <= 0.0:
         return
     for midi in range(int(floor(pitch_min / 4)) * 4, int(ceil(pitch_max)) + 1, 4):
@@ -323,6 +360,7 @@ func _draw() -> void:
         if rect.has_area():
             draw_style_box(note_style, rect)
     var cursor_x = size.x * clampf(cursor_position, 0.1, 0.9)
+    draw_line(Vector2(cursor_x, 154), Vector2(cursor_x, h - 170), Color("#ffe16a", 0.14), 10.0)
     draw_line(Vector2(cursor_x, 154), Vector2(cursor_x, h - 170), Color("#fbbf24"), 3.0)
     _draw_sung_pitch()
     _draw_time_labels()
@@ -356,7 +394,7 @@ func _format_time(seconds: float, milliseconds: bool = true) -> String:
 func _draw_time_labels() -> void:
     var font: Font = get_theme_default_font()
     var text_color = Color("#e5e7eb")
-    draw_rect(Rect2(0, 0, size.x, 40), Color("#111827"))
+    draw_rect(Rect2(0, 0, size.x, 40), GameplayUI.Neon.PANEL)
     var text = "Tempo %s / %s" % [_format_time(elapsed), _format_time(song_duration)]
     draw_string(font, Vector2(12, 27), text, HORIZONTAL_ALIGNMENT_LEFT,
                 maxf(size.x - 24, 0), 20, text_color)
@@ -366,7 +404,7 @@ func _draw_time_labels() -> void:
     draw_string(font, Vector2(370, 136), "Sua voz", HORIZONTAL_ALIGNMENT_LEFT,
                 130, 16, Color("#4ade80"))
     var footer_y = maxf(size.y - 32, 40)
-    draw_rect(Rect2(0, footer_y, size.x, 32), Color("#111827"))
+    draw_rect(Rect2(0, footer_y, size.x, 32), GameplayUI.Neon.PANEL)
     # Reduce label density in a narrow viewport or a longer time window.
     var spacing = maxi(1, int(ceil(maxf(window_seconds, 0.1) * 65 / maxf(size.x, 1))))
     var start = maxf(0.0, _window_start())

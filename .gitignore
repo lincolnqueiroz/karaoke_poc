@@ -4,6 +4,8 @@ workspace/**
 workspace/downloads/**
 !workspace/downloads/.gitkeep
 game/demo/como_eu_quero/
+game/assets/audio/music/*.mp3
+game/assets/audio/sfx/*.mp3
 **/__pycache__/
 *.py[cod]
 .pytest_cache/
@@ -16,3 +18,8 @@ game/demo/como_eu_quero/
 *.log
 dist/
 build/
+
+# Local YouTube audio downloader and its tests
+analyzer/download_youtube.py
+analyzer/src/karaoke_analyzer/youtube.py
+analyzer/tests/test_youtube.py

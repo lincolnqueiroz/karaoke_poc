@@ -16,6 +16,7 @@ lyrics_file = "res://demo/como_eu_quero/lyrics/como_eu_quero.lrc"
 visual_offset_seconds = 0.09999999999999998
 
 [node name="Audio" type="AudioStreamPlayer" parent="." unique_id=762489415]
+bus = &"Music"
 
 [node name="Microphone" type="Node" parent="."]
 script = ExtResource("2")
@@ -48,12 +49,14 @@ layout_mode = 2
 tooltip_text = "Desloca apenas o traço da voz para comparar outra oitava"
 
 [node name="MicrophoneStatus" type="Label" parent="."]
-offset_left = 12.0
-offset_top = 82.0
+anchor_left = 0.55
+offset_top = 44.0
 anchor_right = 1.0
 offset_right = -12.0
 offset_bottom = 108.0
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 2
+autowrap_mode = 3
 text = "Microfone desligado · use fones de ouvido"
 mouse_filter = 2
 

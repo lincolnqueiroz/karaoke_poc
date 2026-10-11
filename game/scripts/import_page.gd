@@ -5,6 +5,7 @@ signal completed(message: String)
 const Importer = preload("res://scripts/song_importer.gd")
 const Lrclib = preload("res://scripts/lrclib_client.gd")
 const Lyrics = preload("res://scripts/lrc_lyrics.gd")
+const Neon = preload("res://scripts/neon_theme.gd")
 var importer: Node
 var source: LineEdit
 var lyrics: LineEdit
@@ -34,19 +35,26 @@ var temporary_lrc: String = ""
 var importing: bool = false
 
 func _ready() -> void:
+    custom_minimum_size.x = 720
     add_theme_constant_override("separation", 12)
     var scroll = ScrollContainer.new()
-    scroll.custom_minimum_size.y = 260
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.follow_focus = true
+    var resize_scroll = func(): scroll.custom_minimum_size.y = clampf(get_viewport_rect().size.y - 380, 260, 440)
+    get_viewport().size_changed.connect(resize_scroll)
+    resize_scroll.call()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     add_child(scroll)
     fields = VBoxContainer.new()
     fields.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     fields.add_theme_constant_override("separation", 10)
     scroll.add_child(fields)
-    source = file_field(fields, "MP3", "*.mp3 ; Áudio MP3")
     title_field = text_field("Título (obrigatório)")
     artist_field = text_field("Artista (opcional)")
+    source = file_field(fields, "MP3", "*.mp3 ; Áudio MP3")
     lyrics_mode = OptionButton.new()
+    lyrics_mode.clip_text = true
+    lyrics_mode.fit_to_longest_item = false
     lyrics_mode.add_item("Sem letra")
     lyrics_mode.add_item("Importar arquivo LRC")
     lyrics_mode.add_item("Buscar letra online — LRCLIB")
@@ -58,11 +66,13 @@ func _ready() -> void:
     online_box.add_theme_constant_override("separation", 8)
     fields.add_child(online_box)
     search_button = Button.new()
-    search_button.text = "Buscar pelo título e artista"
+    search_button.text = "BUSCAR PELO TÍTULO E ARTISTA"
+    Neon.accent_button(search_button, Neon.MAGENTA)
     search_button.pressed.connect(search_lyrics)
     online_box.add_child(search_button)
     results = OptionButton.new()
     results.clip_text = true
+    results.fit_to_longest_item = false
     results.item_selected.connect(select_lyrics)
     online_box.add_child(results)
     lyric_status = Label.new()
@@ -71,6 +81,7 @@ func _ready() -> void:
     online_box.add_child(lyric_status)
     preview = TextEdit.new()
     preview.editable = false
+    preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
     preview.custom_minimum_size.y = 130
     online_box.add_child(preview)
     online_client = Lrclib.new()
@@ -106,12 +117,14 @@ func _ready() -> void:
     status.text = "Selecione um MP3 que você tenha autorização para usar. A análise pode levar vários minutos."
     add_child(status)
     launch = Button.new()
-    launch.text = "Importar música"
+    launch.text = "IMPORTAR MÚSICA"
+    launch.icon = Neon.icon("import")
+    Neon.accent_button(launch, Neon.GREEN)
     launch.custom_minimum_size.y = 48
     launch.pressed.connect(begin)
     add_child(launch)
     back = Button.new()
-    back.text = "Voltar"
+    back.text = "VOLTAR"
     back.pressed.connect(func(): back_requested.emit())
     add_child(back)
     importer.updated.connect(on_update)
@@ -119,7 +132,10 @@ func _ready() -> void:
 
 func file_field(parent: Node, title: String, filter: String, folder: bool = false) -> LineEdit:
     var caption = Label.new()
-    caption.text = title
+    caption.text = title.to_upper()
+    caption.add_theme_color_override("font_color", Neon.CYAN)
+    caption.add_theme_font_size_override("font_size", 15)
+    caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     parent.add_child(caption)
     var row = HBoxContainer.new()
     parent.add_child(row)
@@ -127,7 +143,8 @@ func file_field(parent: Node, title: String, filter: String, folder: bool = fals
     field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     row.add_child(field)
     var choose = Button.new()
-    choose.text = "Escolher"
+    choose.text = "ESCOLHER"
+    choose.add_theme_font_size_override("font_size", 15)
     row.add_child(choose)
     choose.pressed.connect(func():
         var dialog = FileDialog.new()
@@ -233,7 +250,9 @@ func lock_fields(locked: bool) -> void:
 
 func text_field(caption_text: String) -> LineEdit:
     var caption = Label.new()
-    caption.text = caption_text
+    caption.text = caption_text.to_upper()
+    caption.add_theme_color_override("font_color", Neon.CYAN)
+    caption.add_theme_font_size_override("font_size", 15)
     fields.add_child(caption)
     var field = LineEdit.new()
     fields.add_child(field)

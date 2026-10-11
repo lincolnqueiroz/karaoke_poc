@@ -89,8 +89,9 @@ func verify() -> void:
     check(titled_args[titled_args.find("--title") + 1] == "Título & teste" and "--artist" in titled_args,
           "Pass title and artist as distinct arguments")
     page.back_requested.emit()
-    check(menu.content.get_child(0).text == "Escolha sua música", "Back returns to selector")
+    check(menu.content.get_child(0).text == "ESCOLHA SUA MÚSICA", "Back returns to selector")
     menu.queue_free()
     await process_frame
+    await create_timer(0.5).timeout # Let the audio mixer release menu music.
     print("Import checks: ", "PASS" if failures == 0 else "FAIL")
     quit(0 if failures == 0 else 1)
