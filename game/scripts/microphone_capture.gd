@@ -8,6 +8,7 @@ const WINDOW = 1024
 @export_range(-70, -20, 1) var noise_gate_db: float = -45.0
 ## Software gain before the gate and pitch estimator; does not change Windows settings.
 @export_range(0, 30, 1) var input_gain_db: float = 12.0
+var periodicity_threshold: float = 0.15
 
 var active: bool = false
 var capture: AudioEffectCapture
@@ -149,5 +150,5 @@ func consume_frames(frames: PackedVector2Array, rate: float) -> void:
     if _samples.size() < WINDOW or _since_analysis < effective_rate * 0.05:
         return
     _since_analysis = 0
-    var result = Pitch.estimate(_samples, effective_rate, noise_gate_db)
+    var result = Pitch.estimate(_samples, effective_rate, noise_gate_db, periodicity_threshold)
     sample_ready.emit(result, WINDOW / (2.0 * effective_rate))

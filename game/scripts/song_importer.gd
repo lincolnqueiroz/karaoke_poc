@@ -15,13 +15,13 @@ static func project_root() -> String:
 
 static func arguments(source: String, lyrics: String, device: String, separate: bool,
                       download: bool, ffmpeg: String, status_file: String,
-                      output_root: String = "", title: String = "", artist: String = "") -> PackedStringArray:
+                      output_root: String = "", title: String = "", artist: String = "", suite: String = "suite_1") -> PackedStringArray:
     var args = PackedStringArray()
     if OS.has_feature("editor"):
         args.append_array(["-m", "karaoke_analyzer.song_import"])
     args.append_array([source,
         "--output-root", output_root if not output_root.is_empty() else Paths.data_root().path_join("songs"), "--status", status_file,
-        "--data-root", Paths.data_root(), "--device", device])
+        "--data-root", Paths.data_root(), "--device", device, "--suite", suite])
     if not lyrics.is_empty():
         args.append_array(["--lyrics", lyrics])
     if not separate:
@@ -38,7 +38,7 @@ static func arguments(source: String, lyrics: String, device: String, separate: 
 
 func start(python: String, source: String, lyrics: String, device: String,
            separate: bool, download: bool, ffmpeg: String,
-           title: String = "", artist: String = "") -> Error:
+           title: String = "", artist: String = "", suite: String = "suite_1") -> Error:
     if busy:
         return ERR_BUSY
     if not FileAccess.file_exists(python) or not FileAccess.file_exists(source):
@@ -55,7 +55,7 @@ func start(python: String, source: String, lyrics: String, device: String,
         return directory_error
     status_path = jobs.path_join("%s_%s.json" % [
         Time.get_unix_time_from_system(), Time.get_ticks_usec()])
-    var args = arguments(source, lyrics, device, separate, download, ffmpeg, status_path, library_root, title, artist)
+    var args = arguments(source, lyrics, device, separate, download, ffmpeg, status_path, library_root, title, artist, suite)
     worker = Thread.new()
     busy = true
     _last_status = ""

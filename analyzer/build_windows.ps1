@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory=$true)][string]$FFmpegDirectory,
     [string]$ModelCache = '',
     [string]$HuggingFaceCache = '',
+    [string]$PackageDirectory = '',
     [string]$Python = "$PSScriptRoot\.venv\Scripts\python.exe"
 )
 $ErrorActionPreference = 'Stop'
@@ -20,8 +21,8 @@ if ($HuggingFaceCache) {
     $hfModels = (Resolve-Path -LiteralPath $HuggingFaceCache).Path
     if (-not (Test-Path -LiteralPath (Join-Path $hfModels 'hub\models--adefossez--HTDemucs'))) { throw 'HF_HOME deve conter hub\models--adefossez--HTDemucs.' }
 }
-$package = Join-Path $repository 'dist\Karaoke'
-if (Test-Path -LiteralPath $package) { throw 'dist\Karaoke já existe. Mova a versão anterior antes de gerar outra.' }
+$package = if ($PackageDirectory) { [System.IO.Path]::GetFullPath($PackageDirectory) } else { Join-Path $repository 'dist\Karaoke' }
+if (Test-Path -LiteralPath $package) { throw "A pasta de saída já existe: $package. Escolha outra pasta para preservar a versão anterior." }
 $ErrorActionPreference = 'Continue' # Windows PowerShell treats native stderr logs as errors.
 & $Python -m PyInstaller --noconfirm --distpath (Join-Path $repository 'build\analyzer-dist') --workpath (Join-Path $repository 'build\pyinstaller') (Join-Path $PSScriptRoot 'karaoke-analyzer.spec')
 $ErrorActionPreference = 'Stop'

@@ -14,7 +14,8 @@ def setup(tmp_path, monkeypatch):
     source = tmp_path / "Minha música & teste.mp3"
     source.write_bytes(b"original untouched")
 
-    def fake_analyze(source, output, separate, device, progress):
+    def fake_analyze(source, output, separate, device, progress, suite):
+        assert suite == "suite_1"
         progress(0.6, "Pitch")
         (output / "original.mp3").write_bytes(source.read_bytes())
         manifest = output / "song.json"

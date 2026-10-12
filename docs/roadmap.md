@@ -3,12 +3,31 @@
 ## Validação da distribuição
 
 - O usuário confirmou que o executável Windows funcionou bem no computador atual.
-- **Pendente, adiado pelo usuário:** testar `dist/Karaoke` em outro computador
-  Windows sem Python nem FFmpeg instalados. Conferir importação offline,
+- **Em investigação:** no teste em outro computador, o usuário relatou que a
+  voz não gerou pitch e o feedback foi “Sem pitch estável”. A mensagem indica
+  sinal acima do limiar de entrada, mas sem periodicidade aceita pelo estimador;
+  a causa ainda não foi identificada. Conferir dispositivo selecionado, níveis
+  em silêncio e durante uma vogal sustentada e gravação pelo Windows.
+- O usuário completou o teste com um headset Bluetooth: apenas vozes muito
+  agudas geraram pitch. Calibração de ruído, ganho e periodicidade implementada
+  nas configurações; pendente validar com esse dispositivo. A causa da perda
+  de detecção no registro habitual ainda não foi isolada.
+- **Pendente:** concluir a validação em outro computador Windows sem Python
+  nem FFmpeg instalados. Conferir importação offline,
   reprodução, microfone, pontuação e persistência da biblioteca; validar CPU
   e CUDA quando houver GPU compatível.
 
 ## Próxima etapa do MVP
+
+Para melhorar a referência vocal, seguir o [plano de validação de pitch](pitch-validation-plan.md):
+conjunto anotado, avaliação de cobertura/pitch/limites de notas e medições por
+etapa antes de substituir estimadores. Inclui pesquisa de projetos semelhantes
+e cenários de voz grave, ataques repetidos, instrumental, backing vocals e coros.
+
+Seleção conservadora entre janelas e filtro de vazamento implementados:
+[estratégia e resultados](note-segmentation-strategy.md). O refrão de `we_are`
+continua com cobertura insuficiente; priorizar separação/extração e revisão
+humana, sem relaxar a segmentação a ponto de gerar notas instrumentais.
 
 - Captura, ganho, ajuste de oitava e traço de pitch validados pelo usuário.
 - Pontuação inicial implementada com afinação e cobertura; calibrar tolerâncias

@@ -1,5 +1,12 @@
 # Pitch stabilization and note segmentation
 
+Current pipeline selection and regression results:
+[two-window reference strategy, 2026-10-12](note-segmentation-strategy.md).
+The sections below retain the history of earlier changes. The current pipeline
+also supplies an `activity_mask`; identical pitches are never merged across
+explicitly inactive frames. Candidate recovery can now use independent window
+agreement even when raw voicing is false, under the documented constraints.
+
 The analyzer retains the raw estimated F0, voicing and probability in
 `pitch-debug.csv`, and writes centered vocal/input energy to `activity-debug.csv`.
 Processing affects only the exported notes; neither the

@@ -5,12 +5,12 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from karaoke_analyzer import pipeline
+from karaoke_analyzer.suites.suite_1 import pipeline
 
 
 @pytest.fixture(autouse=True)
 def isolated_secondary_pitch(monkeypatch):
-    def secondary(path):
+    def secondary(path, **kwargs):
         times, f0, _, _ = pipeline.estimate_pitch(path)
         return times, np.full_like(f0, np.nan), np.zeros(len(f0), dtype=bool), np.zeros(len(f0))
     monkeypatch.setattr(pipeline, "estimate_secondary_pitch", secondary)
@@ -28,7 +28,7 @@ def test_pipeline_uses_probability_and_exports_raw_diagnostics(
         return destination
 
     monkeypatch.setattr(pipeline, "decode_to_wav", decode)
-    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path: (
+    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path, **kwargs: (
         np.arange(100) * 0.01, np.array([440.] * 50 + [880.] * 50),
         np.ones(100, dtype=bool), np.array([0.9] * 50 + [0.01] * 50),
     ))
@@ -59,7 +59,7 @@ def test_separation_preserves_original_duration(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pipeline, "decode_to_wav", decode)
     monkeypatch.setattr(pipeline, "separate_vocals", lambda *args, **kwargs: vocals)
-    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path: (
+    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path, **kwargs: (
         np.array([]), np.array([]), np.array([], dtype=bool), np.array([])))
     manifest = pipeline.analyze(source, tmp_path / "result", separate=True)
     assert json.loads(manifest.read_text())["duration_seconds"] == 2.0
@@ -74,7 +74,7 @@ def test_notes_are_clipped_to_original_audio_end(tmp_path, monkeypatch):
         return destination
 
     monkeypatch.setattr(pipeline, "decode_to_wav", decode)
-    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path: (
+    monkeypatch.setattr(pipeline, "estimate_pitch", lambda path, **kwargs: (
         np.array([]), np.array([]), np.array([], dtype=bool), np.array([])))
     monkeypatch.setattr(pipeline, "segment_notes", lambda *args, **kwargs: [
         {"start": 0.5, "duration": 0.52, "midi": 69, "confidence": 1.0},
@@ -93,7 +93,7 @@ def test_pipeline_uses_consensus_without_rewriting_primary_probability(tmp_path,
         sf.write(str(destination), np.full(22050, 0.1), 22050)
         return destination
 
-    def track(path):
+    def track(path, **kwargs):
         return (np.arange(100) * 0.01, np.full(100, 110.0),
                 np.ones(100, dtype=bool), np.full(100, 0.02))
 
@@ -108,3 +108,31 @@ def test_pipeline_uses_consensus_without_rewriting_primary_probability(tmp_path,
     with (manifest.parent / "pitch-consensus-debug.csv").open() as handle:
         support = list(csv.DictReader(handle))
     assert all(row["supported_by_both_windows"] == "True" for row in support)
+
+
+def test_pipeline_recovers_agreed_candidates_but_preserves_unvoiced_raw_frames(tmp_path, monkeypatch):
+    source = tmp_path / "input.mp3"
+    source.write_bytes(b"fake")
+
+    def decode(source, destination):
+        sf.write(destination, np.full(22050, 0.1), 22050)
+        return destination
+
+    def track(path, *, diagnostics):
+        diagnostics["candidate_f0"] = np.full(100, 220.0)
+        return (np.arange(100) * 0.01, np.full(100, np.nan),
+                np.zeros(100, bool), np.full(100, 0.02))
+
+    monkeypatch.setattr(pipeline, "decode_to_wav", decode)
+    monkeypatch.setattr(pipeline, "estimate_pitch", track)
+    monkeypatch.setattr(pipeline, "estimate_secondary_pitch", track)
+    output = tmp_path / "output"
+    manifest = pipeline.analyze(source, output)
+    assert json.loads(manifest.read_text())["notes"][0]["midi"] == 57
+    with (output / "pitch-debug.csv").open() as handle:
+        raw = list(csv.DictReader(handle))
+    assert all(row["voiced"] == "False" and np.isnan(float(row["f0_hz"])) for row in raw)
+    with (output / "reference-debug.csv").open() as handle:
+        chosen = list(csv.DictReader(handle))
+    assert all(row["source"] == "2" for row in chosen)
+    assert (output / "pitch-candidates-debug.csv").is_file()

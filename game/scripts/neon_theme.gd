@@ -54,6 +54,19 @@ static func create(font_size: int = 18) -> Theme:
         result.set_color("selection_color", kind, Color("#573569"))
     result.set_color("font_color", "CheckBox", TEXT)
     result.set_color("font_hover_color", "CheckBox", CYAN)
+    result.set_color("font_pressed_color", "CheckBox", TEXT)
+    result.set_color("font_hover_pressed_color", "CheckBox", CYAN)
+    result.set_color("font_disabled_color", "CheckBox", MUTED)
+    for radio in [false, true]:
+        for checked in [false, true]:
+            var key = ("radio_" if radio else "") + ("checked" if checked else "unchecked")
+            for kind in ["CheckBox", "PopupMenu"]:
+                result.set_icon(key, kind, selection_icon(checked, radio))
+                result.set_icon(key + "_disabled", kind, selection_icon(checked, radio, true))
+    var selection_focus = frame(YELLOW, 4, false)
+    selection_focus.draw_center = false
+    selection_focus.set_border_width_all(2)
+    result.set_stylebox("focus", "CheckBox", selection_focus)
     result.set_stylebox("panel", "PopupMenu", frame(MAGENTA))
     result.set_color("font_color", "PopupMenu", TEXT)
     result.set_color("font_hover_color", "PopupMenu", CYAN)
@@ -68,6 +81,17 @@ static func create(font_size: int = 18) -> Theme:
     result.set_stylebox("grabber_area", "HSlider", track)
     result.set_stylebox("grabber_area_highlight", "HSlider", track)
     return result
+
+static func selection_icon(checked: bool, radio: bool, disabled: bool = false) -> Texture2D:
+    var color = MUTED if disabled else (GREEN if checked else CYAN)
+    var outline = '<circle cx="12" cy="12" r="9"/>' if radio else '<rect x="3" y="3" width="18" height="18" rx="3"/>'
+    var mark = ''
+    if checked:
+        mark = '<circle cx="12" cy="12" r="4" fill="#%s" stroke="none"/>' % color.to_html(false) if radio else '<path d="m7 12 3.5 3.5L17 9" fill="none" stroke-width="2.8"/>'
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="#0d1428" stroke="#%s" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">%s%s</g></svg>' % [color.to_html(false), outline, mark]
+    var source = Image.new()
+    source.load_svg_from_string(svg)
+    return ImageTexture.create_from_image(source)
 
 static func accent_button(button: Button, accent: Color) -> void:
     button.add_theme_stylebox_override("normal", frame(Color(accent, 0.62)))
@@ -91,6 +115,8 @@ static func title(label: Label, accent: Color = CYAN, font_size: int = 36) -> vo
 
 static func icon(kind: String) -> Texture2D:
     var paths = {
+        "play": '<path d="m8 4 12 8-12 8Z"/>',
+        "pause": '<path d="M8 4v16M16 4v16"/>',
         "note": '<path d="M9 17V5l11-2v12M9 8l11-2"/><ellipse cx="6" cy="17" rx="3" ry="2"/><ellipse cx="17" cy="15" rx="3" ry="2"/>',
         "settings": '<path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/><circle cx="12" cy="12" r="3"/>',
         "power": '<path d="M12 2v9M6 5a9 9 0 1 0 12 0"/>',

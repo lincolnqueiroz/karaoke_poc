@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .pipeline import analyze
 from .runtime import bundle_root, data_root, packaged
+from .suites import DEFAULT_SUITE, get_suite, suite_ids
 
 WORKSPACE = data_root()
 
@@ -35,7 +36,7 @@ def import_song(source: Path, output_root: Path, status: Path, lyrics: Path | No
                 separate: bool = True, device: str = "cuda",
                 allow_model_download: bool = False, ffmpeg_location: Path | None = None,
                 storage_root: Path | None = None, title: str | None = None,
-                artist: str = ""):
+                artist: str = "", suite: str = DEFAULT_SUITE):
     source, output_root, status = source.resolve(), output_root.resolve(), status.resolve()
     workspace = (storage_root or WORKSPACE).resolve()
     for path in (output_root, status):
@@ -49,6 +50,7 @@ def import_song(source: Path, output_root: Path, status: Path, lyrics: Path | No
     old_hf_home = os.environ.get("HF_HOME")
     staging = workspace / "import-jobs" / uuid.uuid4().hex / "song"
     try:
+        get_suite(suite)
         write_status(status, "running", 0.0, "Preparando importação")
         if title is not None and not title.strip():
             raise ValueError("Informe o título da música")
@@ -82,7 +84,7 @@ def import_song(source: Path, output_root: Path, status: Path, lyrics: Path | No
         if separate:
             os.environ["KARAOKE_OFFLINE_MODELS"] = "0" if allow_model_download else "1"
         staging.mkdir(parents=True)
-        manifest = analyze(source, staging, separate, device,
+        manifest = analyze(source, staging, separate, device, suite=suite,
                            progress=lambda fraction, message: write_status(
                                status, "running", fraction, message))
         if not manifest.is_file():
@@ -151,12 +153,13 @@ def main():
     parser.add_argument("--data-root", type=Path)
     parser.add_argument("--title", help="Display title; defaults to the filename for older callers")
     parser.add_argument("--artist", default="")
+    parser.add_argument("--suite", choices=suite_ids(), default=DEFAULT_SUITE)
     args = parser.parse_args()
     try:
         import_song(args.source, args.output_root, args.status, args.lyrics,
                     not args.without_separation, args.device,
                     args.allow_model_download, args.ffmpeg_location, args.data_root,
-                    args.title, args.artist)
+                    args.title, args.artist, args.suite)
     except Exception as exc:  # noqa: BLE001 - CLI boundary reports errors to the UI.
         parser.exit(1, f"Importação falhou: {exc}\n")
 

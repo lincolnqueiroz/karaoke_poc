@@ -1,5 +1,7 @@
 import json
+
 import pytest
+
 from karaoke_analyzer.exporter import export_song
 
 

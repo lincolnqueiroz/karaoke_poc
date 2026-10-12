@@ -13,6 +13,7 @@ var python: LineEdit
 var ffmpeg: LineEdit
 var separate: CheckBox
 var downloads: CheckBox
+var analysis_suite: OptionButton
 var device: OptionButton
 var progress: ProgressBar
 var status: Label
@@ -96,6 +97,30 @@ func _ready() -> void:
         python = file_field(fields, "Python do venv", "*.exe ; Executável Python")
         python.text = Importer.Paths.analyzer()
         ffmpeg = file_field(fields, "Pasta FFmpeg (opcional se estiver no PATH)", "", true)
+    if OS.is_debug_build():
+        var suite_caption = Label.new()
+        suite_caption.text = "SUÍTE DE ANÁLISE (DEPURAÇÃO)"
+        suite_caption.add_theme_color_override("font_color", Neon.CYAN)
+        fields.add_child(suite_caption)
+        analysis_suite = OptionButton.new()
+        analysis_suite.add_item("Suíte 1 — pYIN conservador")
+        analysis_suite.set_item_metadata(0, "suite_1")
+        analysis_suite.add_item("Suíte 2 — Demucs duplo")
+        analysis_suite.set_item_metadata(1, "suite_2")
+        analysis_suite.add_item("Suíte 3 — Energia relativa")
+        analysis_suite.set_item_metadata(2, "suite_3")
+        analysis_suite.add_item("Suíte 4 — HPSS")
+        analysis_suite.set_item_metadata(3, "suite_4")
+        analysis_suite.add_item("Suíte 5 — HPSS + Harmônicos")
+        analysis_suite.set_item_metadata(4, "suite_5")
+        analysis_suite.add_item("Suíte 6 — Demucs ajustado + HPSS")
+        analysis_suite.set_item_metadata(5, "suite_6")
+        analysis_suite.add_item("Suíte 7 — HPSS + Corte absoluto")
+        analysis_suite.set_item_metadata(6, "suite_7")
+        analysis_suite.add_item("Suíte 8 — HPSS + Pós-processamento")
+        analysis_suite.set_item_metadata(7, "suite_8")
+        analysis_suite.tooltip_text = "Define o algoritmo da nova importação. Músicas já importadas preservam suas notas."
+        fields.add_child(analysis_suite)
     separate = CheckBox.new()
     separate.text = "Separar voz com Demucs (recomendado)"
     separate.button_pressed = true
@@ -105,6 +130,8 @@ func _ready() -> void:
     device.add_item("CPU")
     fields.add_child(device)
     separate.toggled.connect(func(enabled): device.disabled = not enabled)
+    if analysis_suite != null:
+        analysis_suite.item_selected.connect(func(_index): update_suite_controls())
     downloads = CheckBox.new()
     downloads.text = "Permitir baixar pesos oficiais do Demucs se necessário"
     fields.add_child(downloads)
@@ -209,7 +236,8 @@ func begin() -> void:
     var error = importer.start(executable, source.text.strip_edges(),
         selected_path, "cuda" if device.selected == 0 else "cpu",
         separate.button_pressed, downloads.button_pressed, tools,
-        title_field.text.strip_edges(), artist_field.text.strip_edges())
+        title_field.text.strip_edges(), artist_field.text.strip_edges(),
+        str(analysis_suite.get_item_metadata(analysis_suite.selected)) if analysis_suite != null else "suite_1")
     if error != OK:
         status.text = "Confira os arquivos selecionados e a instalação do analisador: " + error_string(error)
         cleanup_lyrics()
@@ -244,9 +272,17 @@ func lock_fields(locked: bool) -> void:
         elif node is LineEdit:
             node.editable = not locked
     if not locked:
+        update_suite_controls()
         device.disabled = not separate.button_pressed
         preview.editable = false
         results.disabled = candidates.is_empty()
+
+func update_suite_controls() -> void:
+    var requires_separation = analysis_suite != null and str(analysis_suite.get_item_metadata(analysis_suite.selected)) in ["suite_2", "suite_5", "suite_6"]
+    if requires_separation:
+        separate.button_pressed = true
+    separate.disabled = requires_separation or importing
+    separate.tooltip_text = "Esta suíte exige os stems do Demucs." if requires_separation else ""
 
 func text_field(caption_text: String) -> LineEdit:
     var caption = Label.new()

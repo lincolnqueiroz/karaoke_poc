@@ -27,6 +27,9 @@ func verify() -> void:
     check(args[2] == "C:/music/a & b.mp3", "Paths remain separate subprocess arguments")
     check("--without-separation" in args and "--allow-model-download" not in args,
           "Model downloads require explicit option")
+    check(args[args.find("--suite") + 1] == "suite_1", "Default suite reaches analyzer")
+    var suite_args = Importer.arguments("song.mp3", "", "cpu", false, false, "", "job.json", "", "", "", "future_suite")
+    check(suite_args[suite_args.find("--suite") + 1] == "future_suite", "Selected suite reaches analyzer unchanged")
     var service = FakeImporter.new()
     root.add_child(service)
     var reports: Array = []
@@ -64,6 +67,43 @@ func verify() -> void:
     var page = menu.content.get_child(1)
     check(not page.downloads.button_pressed and page.separate.button_pressed,
           "Import form defaults to separation with cached weights")
+    if OS.is_debug_build():
+        check(page.analysis_suite != null and page.analysis_suite.get_item_metadata(0) == "suite_1",
+              "Debug import offers preserved suite 1")
+        page.separate.button_pressed = false
+        page.analysis_suite.select(1)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(1) == "suite_2" and page.separate.button_pressed and page.separate.disabled,
+              "Suite 2 requires vocal separation")
+        page.analysis_suite.select(0)
+        page.update_suite_controls()
+        check(not page.separate.disabled, "Suite 1 allows optional separation again")
+        page.analysis_suite.select(2)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(2) == "suite_3" and not page.separate.disabled,
+              "Suite 3 is selectable with optional separation")
+        page.analysis_suite.select(3)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(3) == "suite_4" and not page.separate.disabled,
+              "Suite 4 offers HPSS with optional separation")
+        page.analysis_suite.select(4)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(4) == "suite_5" and page.separate.disabled and page.separate.button_pressed,
+              "Suite 5 requires accompaniment and vocal stems")
+        page.analysis_suite.select(5)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(5) == "suite_6" and page.separate.disabled and page.separate.button_pressed,
+              "Suite 6 requires adjusted Demucs separation")
+        page.analysis_suite.select(6)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(6) == "suite_7" and not page.separate.disabled,
+              "Suite 7 offers HPSS and aggressive absolute gate with optional separation")
+        page.analysis_suite.select(7)
+        page.update_suite_controls()
+        check(page.analysis_suite.get_item_metadata(7) == "suite_8" and not page.separate.disabled,
+              "Suite 8 offers postprocessing with optional separation")
+    else:
+        check(page.analysis_suite == null, "Release hides experimental selection")
     page.begin()
     check(page.status.text.contains("título") and not menu.importer.busy,
           "Title is required before launching analysis")

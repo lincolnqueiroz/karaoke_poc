@@ -10,8 +10,10 @@ const SETTINGS_PATH = "user://settings.cfg"
 const MENU_MUSIC_PATH = "res://assets/audio/music/menu.mp3"
 var input_device: String = "Default"
 var input_gain_db: float = 12.0
+var microphone_profile: Dictionary = {}
 var volumes: Dictionary = {"Master": 100.0, "Music": 100.0, "Effects": 100.0, "MenuMusic": 30.0}
 var menu_music: AudioStreamPlayer
+var song_preview: Node
 var content: VBoxContainer
 var menu_panel: CenterContainer
 var player: Control
@@ -28,6 +30,13 @@ func _ready() -> void:
         var gain = settings.get_value("microphone", "gain_db", 12.0)
         if (gain is float or gain is int) and is_finite(float(gain)):
             input_gain_db = clampf(float(gain), 0, 30)
+        var profile = settings.get_value("microphone", "calibration", {})
+        if profile is Dictionary and profile.get("device", "") == input_device:
+            var gate = profile.get("gate_db", null)
+            var threshold = profile.get("threshold", null)
+            if (gate is float or gate is int) and (threshold is float or threshold is int):
+                if is_finite(float(gate)) and gate >= -70 and gate <= -20 and is_finite(float(threshold)) and threshold >= 0.15 and threshold <= 0.30:
+                    microphone_profile = profile
     elif error != ERR_FILE_NOT_FOUND:
         push_warning("Não foi possível carregar as configurações: " + error_string(error))
     for bus in volumes:
@@ -36,6 +45,9 @@ func _ready() -> void:
             volumes[bus] = clampf(float(value), 0, 100)
         apply_volume(bus, volumes[bus])
     setup_menu_music()
+    song_preview = preload("res://scripts/song_preview.gd").new()
+    song_preview.menu_music = menu_music
+    add_child(song_preview)
     add_child(Neon.background())
     theme = Neon.create(18)
     menu_panel = CenterContainer.new()
@@ -67,14 +79,18 @@ func setup_menu_music() -> void:
     menu_music.stream = stream
 
 func play_menu_music() -> void:
-    if menu_music != null and menu_music.stream != null and not menu_music.playing:
+    if menu_music != null and menu_music.stream != null and not menu_music.playing and not menu_music.stream_paused:
         menu_music.play()
 
 func _exit_tree() -> void:
+    if is_instance_valid(song_preview):
+        song_preview.stop(false)
     if is_instance_valid(menu_music):
         menu_music.stop()
 
 func clear_page(title: String) -> void:
+    if is_instance_valid(song_preview):
+        song_preview.stop()
     content.alignment = BoxContainer.ALIGNMENT_CENTER if title == "KARAOKÊ" else BoxContainer.ALIGNMENT_BEGIN
     for child in content.get_children():
         content.remove_child(child)
@@ -135,20 +151,45 @@ func show_songs() -> void:
     list.add_theme_constant_override("separation", 10)
     scroll.add_child(list)
     for song in library.songs:
+        var row = HBoxContainer.new()
+        row.add_theme_constant_override("separation", 10)
+        list.add_child(row)
         var seconds = int(song.duration)
         var song_label = str(song.title)
         if not str(song.get("artist", "")).is_empty():
             song_label += " — " + str(song.artist)
         var song_button = button("%s  ·  %02d:%02d" % [song_label, int(seconds / 60.0), seconds % 60],
-               func(): open_song(song), list)
+               func(): open_song(song), row)
+        song_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         song_button.icon = Neon.icon("note")
         song_button.clip_text = true
         song_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        var preview_button = button("", func():
+            if song_preview.manifest == song.manifest:
+                song_preview.stop()
+            else:
+                var error = song_preview.start(song)
+                status.text = error, row)
+        preview_button.custom_minimum_size.x = 52
+        preview_button.icon = Neon.icon("play")
+        preview_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        preview_button.tooltip_text = "Ouvir 10 segundos a partir do meio da música"
+        Neon.accent_button(preview_button, Neon.GREEN)
+        var update_preview = func(active_manifest):
+            if is_instance_valid(preview_button):
+                var active = active_manifest == song.manifest
+                preview_button.icon = Neon.icon("pause" if active else "play")
+                preview_button.tooltip_text = "Interromper prévia" if active else "Ouvir 10 segundos a partir do meio da música"
+        song_preview.changed.connect(update_preview)
+        preview_button.tree_exiting.connect(func():
+            if song_preview.changed.is_connected(update_preview):
+                song_preview.changed.disconnect(update_preview))
     if library.songs.is_empty():
         label("Nenhuma música importada encontrada. Adicione a análise e o áudio à biblioteca local.")
     if not library.errors.is_empty():
         var warning = label("Algumas músicas não puderam ser carregadas. Passe o mouse aqui para detalhes.")
         warning.tooltip_text = "\n".join(library.errors)
+    status = label("")
     button("Voltar", show_main)
 
     var import_button = button("Importar música", show_import)
@@ -203,6 +244,35 @@ func show_settings() -> void:
     gain.value = input_gain_db
     gain.suffix = "dB"
     microphone_settings.add_child(gain)
+    var calibrate = button("Calibrar microfone", func():
+        var device = devices.get_item_text(devices.selected) if devices.selected >= 0 else "Default"
+        var dialog = preload("res://scripts/calibration_dialog.gd").new()
+        dialog.device = device
+        dialog.theme = theme
+        var resume_music = menu_music.playing
+        menu_music.stop()
+        add_child(dialog)
+        dialog.tree_exited.connect(func():
+            if resume_music:
+                play_menu_music())
+        dialog.calibrated.connect(func(profile):
+            var previous = microphone_profile.duplicate()
+            profile["device"] = device
+            microphone_profile = profile
+            var error = save_settings(device, profile.gain_db)
+            if error == OK:
+                gain.value = input_gain_db
+                status.text = "Calibração aplicada e salva para este microfone."
+            else:
+                microphone_profile = previous
+                status.text = "Não foi possível salvar a calibração: " + error_string(error))
+        dialog.popup_centered(), microphone_settings)
+    calibrate.disabled = devices.disabled
+    var test_microphone = button("Testar microfone", func():
+        var device = devices.get_item_text(devices.selected) if devices.selected >= 0 else "Default"
+        open_microphone_test(device, gain.value), microphone_settings)
+    test_microphone.name = "TestMicrophone"
+    test_microphone.disabled = devices.disabled
     for entry in [["Master", "Volume geral"], ["Effects", "Volume dos efeitos"],
                   ["Music", "Volume da canção"], ["MenuMusic", "Música de fundo (menus)"]]:
         volume_control(audio_settings, entry[0], entry[1])
@@ -211,12 +281,34 @@ func show_settings() -> void:
         status.text = "Microfone salvo indisponível. Escolha outro dispositivo."
     button("Salvar configurações", func():
         var device = devices.get_item_text(devices.selected) if devices.selected >= 0 else "Default"
+        var previous_profile = microphone_profile.duplicate()
+        if device != input_device or not is_equal_approx(gain.value, input_gain_db):
+            microphone_profile = {}
         var error = save_settings(device, gain.value)
         if error != OK:
+            microphone_profile = previous_profile
             status.text = "Não foi possível salvar: " + error_string(error)
             return
         status.text = "Configurações salvas.")
     button("Voltar", show_main)
+
+func open_microphone_test(device: String, gain: float) -> void:
+    var test = preload("res://scripts/microphone_test.gd").new()
+    test.device = device
+    test.gain_db = gain
+    if microphone_profile.get("device", "") == device and is_equal_approx(gain, input_gain_db):
+        test.gate_db = microphone_profile.get("gate_db", -45.0)
+        test.threshold = microphone_profile.get("threshold", 0.15)
+    var resume_music = menu_music.playing
+    menu_music.stop()
+    menu_panel.hide()
+    test.back_requested.connect(func():
+        remove_child(test)
+        test.queue_free()
+        menu_panel.show()
+        if resume_music:
+            play_menu_music())
+    add_child(test)
 
 func save_settings(device: String, gain: float, path: String = SETTINGS_PATH) -> Error:
     if not is_finite(gain) or gain < 0 or gain > 30:
@@ -224,6 +316,7 @@ func save_settings(device: String, gain: float, path: String = SETTINGS_PATH) ->
     var config = ConfigFile.new()
     config.set_value("microphone", "device", device)
     config.set_value("microphone", "gain_db", gain)
+    config.set_value("microphone", "calibration", microphone_profile)
     for bus in volumes:
         config.set_value("volume", bus, volumes[bus])
     var error = config.save(path)
@@ -264,6 +357,7 @@ func volume_control(parent: Node, bus: String, caption: String) -> void:
         value.text = "%d%%" % percentage)
 
 func open_song(song: Dictionary) -> void:
+    song_preview.stop()
     if not FileAccess.file_exists(song.manifest):
         show_songs()
         label("A música selecionada não está mais disponível.")
@@ -273,6 +367,9 @@ func open_song(song: Dictionary) -> void:
     player.lyrics_file = song.lyrics
     player.configured_input_device = input_device
     player.get_node("Microphone").input_gain_db = input_gain_db
+    if microphone_profile.get("device", "") == input_device:
+        player.get_node("Microphone").noise_gate_db = microphone_profile.get("gate_db", -45.0)
+        player.get_node("Microphone").periodicity_threshold = microphone_profile.get("threshold", 0.15)
     player.get_node("MicrophoneControls/Devices").hide()
     player.get_node("MicrophoneControls/Gain").hide()
     player.menu_requested.connect(return_to_menu)

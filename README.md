@@ -79,7 +79,12 @@ python -m karaoke_analyzer analyze ..\samples\example.mp3 --output ..\workspace\
 
 **Important:** Without `--separate`, pitch tracking runs on the entire mix and can be inaccurate. The first run of Demucs may download pretrained model weights. Demucs may require substantial VRAM/RAM. On CUDA errors, retry `--device cpu`.
 
-Generated output: `original.mp3`, `analysis.wav`, `pitch-debug.csv`, `pitch-secondary-debug.csv`, `pitch-consensus-debug.csv`, `activity-debug.csv`, `recovery-debug.csv`, `song.json` and optionally `stems/`. No MP3s are distributed.
+Generated output: `original.mp3`, `analysis.wav`, `pitch-debug.csv`, `pitch-secondary-debug.csv`, `pitch-consensus-debug.csv`, `pitch-candidates-debug.csv`, `reference-debug.csv`, `activity-debug.csv`, `recovery-debug.csv`, `song.json` and optionally `stems/`. No MP3s are distributed.
+
+The pYIN pipeline now selects supported estimates from both windows, filters
+separation leakage and avoids merging across detected inactivity. See the
+[implementation strategy and measured limitations](docs/note-segmentation-strategy.md).
+Existing imported songs keep their saved notes until reanalyzed.
 
 ## Godot preview
 1. Open `game/project.godot` with Godot 4 and run the main scene.
@@ -105,6 +110,16 @@ The silent synthetic demo is excluded. Exported games should include songs
 under `game/demo`; the workspace path is a development convenience.
 
 ### Import songs from the selector
+
+Each song also has a **▶** preview button: it plays up to ten seconds starting at
+the midpoint of the original MP3, using the song volume. Click **⏸** to
+interrupt it. Switching previews or leaving the selector stops the current
+preview. Menu music pauses during playback and resumes from its saved position,
+including when the preview ends automatically. Songs shorter than twenty seconds
+play only the available remainder after their midpoint.
+
+Preview playback checks: `godot --headless --path game --script res://tests/test_song_preview.gd`
+(the playback portion uses the locally supplied menu MP3 and skips if absent).
 
 Open **Jogar → Importar música**, choose a local MP3 and optionally its LRC,
 then start the import. The screen uses the existing analyzer venv, offers
@@ -202,3 +217,30 @@ Run flow checks with `godot --headless --path game --script res://tests/test_gam
    [project roadmap](docs/roadmap.md) for scope and validation steps.
 
 See `AGENTS.md` for Codex constraints and `docs/song-schema-v1.md` for the data contract.
+## Suítes de análise
+
+O algoritmo atual foi preservado como [Suíte 1](analyzer/src/karaoke_analyzer/suites/suite_1/README.md).
+Na importação pelo Godot em depuração, o campo **Suíte de análise** escolhe o
+algoritmo da nova análise. Estão disponíveis as suítes 1 a 8; futuras estratégias
+terão implementações próprias. A [Suíte 2](analyzer/src/karaoke_analyzer/suites/suite_2/README.md)
+testa uma segunda passagem do Demucs no vocal, usando a segmentação da suíte 1.
+A [Suíte 3](analyzer/src/karaoke_analyzer/suites/suite_3/README.md) testa um piso
+de energia relativo por música, substituindo os cortes absolutos de −50 dBFS.
+A [Suíte 4](analyzer/src/karaoke_analyzer/suites/suite_4/README.md) aplica HPSS antes
+do pYIN, mantendo os filtros e a segmentação da suíte 1.
+A [Suíte 5](analyzer/src/karaoke_analyzer/suites/suite_5/README.md) mantém HPSS e
+compara harmônicos do vocal e acompanhamento para vetar vazamentos instrumentais.
+Ela exige separação com Demucs.
+A [Suíte 6](analyzer/src/karaoke_analyzer/suites/suite_6/README.md) testa Demucs
+com 4 shifts, overlap de 50% e stems float32 sem reescala, seguido de HPSS.
+A [Suíte 7](analyzer/src/karaoke_analyzer/suites/suite_7/README.md) preserva a base
+da suíte 4 e aumenta o corte absoluto de energia para −25 dBFS (revisão 2).
+A [Suíte 8](analyzer/src/karaoke_analyzer/suites/suite_8/README.md) preserva a base
+da suíte 7 e acrescenta limpeza conservadora e recuperação de pequenas lacunas
+com apoio do pitch bruto, salvando notas antes e depois do pós-processamento.
+Músicas existentes conservam suas notas; uma
+nova importação do mesmo MP3 cria outra entrada para comparação.
+
+O CLI aceita `--suite suite_1` até `--suite suite_8`; suítes 2, 5 e 6 exigem `--separate`. Cada análise registra sua identificação em
+`analysis-suite.json`, ao lado do `song.json`, sem mudar o contrato v1.
+Não há seletor experimental em builds de produção.

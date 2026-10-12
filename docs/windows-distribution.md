@@ -46,7 +46,47 @@ godot --headless --path game --export-release 'Windows Desktop' '../dist/Karaoke
 O preset exclui testes e subpastas locais de demo. Antes da distribuição,
 confira o pacote e inclua os avisos/licenças e materiais de redistribuição
 exigidos pelas versões empacotadas, especialmente pelo FFmpeg GPL atual.
-O script ainda não gera esses materiais nem um instalador.
+O instalador v0.1 e a coleta de avisos locais estão descritos abaixo. A coleta
+não substitui a verificação das condições de redistribuição das dependências.
+
+## Instalador v0.1
+
+O build desta release fica em `dist/releases/v0.1/Karaoke`, preservando
+`dist/Karaoke`. Para gerar outro pacote sem sobrescrever o anterior, passe
+`-PackageDirectory` ao script de build do analisador e ajuste o destino da
+exportação Godot para essa mesma pasta.
+
+Depois de preparar o pacote completo, com Inno Setup 6/7 instalado:
+
+```powershell
+.\analyzer\.venv\Scripts\python.exe installer/collect_notices.py `
+  dist/releases/v0.1/Karaoke --ffmpeg-license 'CAMINHO\LICENSE.txt'
+.\installer\build_installer.ps1 -Compiler 'D:\Inno Setup 6\ISCC.exe'
+```
+
+`installer/karaoke.iss` instala por usuário em
+`%LOCALAPPDATA%/Programs/KaraokePoC`, cria atalho no Menu Iniciar e oferece
+atalho na área de trabalho. O desinstalador preserva biblioteca e configurações
+em `user://`. O instalador produz um Setup.exe e partes `.bin` de até 1,5 GB em
+`dist/releases/v0.1/installer`; todos devem ficar juntos para instalar.
+Não copiar a pasta `Karaoke Smoke` antiga.
+
+O relatório em inglês, incluindo verificações e pendências da versão, fica em
+[release-v0.1.md](release-v0.1.md). A publicação da release não é automática.
+
+Na geração v0.1, PyInstaller, exportação Godot e compilação Inno Setup 6.7.3
+concluíram com sucesso. O instalador tem um EXE e dois BINs, totalizando 2,05 GB;
+os checksums estão em `dist/releases/v0.1/SHA256SUMS.txt`. Os 82 testes Python e
+as oito suítes Godot passaram; Ruff completo ainda aponta dois problemas antigos
+de organização de imports. O pacote importou um tom sintético em CPU e separou
+offline em CUDA, sem Python/FFmpeg externos no PATH.
+
+O teste silencioso do instalador não conseguiu resolver a constante de pasta
+`localappdata`: `SHGetFolderPath` retornou `0x80070002` neste ambiente de execução.
+Não houve instalação de arquivos do aplicativo. A instalação e desinstalação
+precisam ser validadas em uma sessão Windows normal. O helper de teste está em
+`installer/test_installation.ps1`; preserva os dados e logs da tentativa em
+`workspace/environment-check/v0.1 installer smoke/`.
 
 ## Validação pendente do pacote
 

@@ -1,7 +1,8 @@
 extends RefCounted
 
 ## Lightweight YIN-style estimator for a single voice; no ML or reference input.
-static func estimate(samples: PackedFloat32Array, rate: float, gate_db: float = -45.0) -> Dictionary:
+static func estimate(samples: PackedFloat32Array, rate: float, gate_db: float = -45.0,
+                     periodicity_threshold: float = 0.15) -> Dictionary:
     var empty = {"frequency": 0.0, "midi": 0.0, "confidence": 0.0, "rms_db": -120.0}
     if rate <= 0 or samples.size() < 512:
         return empty
@@ -37,7 +38,7 @@ static func estimate(samples: PackedFloat32Array, rate: float, gate_db: float = 
         difference[lag] = squared * lag / cumulative if cumulative > 0 else 1.0
     # The first good minimum avoids selecting a later multiple of the period.
     for lag in range(min_lag, max_lag):
-        if difference[lag] < 0.15 and difference[lag] <= difference[lag + 1]:
+        if difference[lag] < clampf(periodicity_threshold, 0.15, 0.30) and difference[lag] <= difference[lag + 1]:
             var period: float = lag
             var denominator = difference[lag - 1] - 2 * difference[lag] + difference[lag + 1]
             if absf(denominator) > 0.000001:
